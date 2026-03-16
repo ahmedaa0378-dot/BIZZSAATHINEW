@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Mail, Phone, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../stores/appStore';
+import { useAuthStore, useBusinessStore } from '../stores/appStore';
 import { useNavigate } from 'react-router-dom';
 import AnimatedLogo from '../components/brand/AnimatedLogo';
 
@@ -17,7 +17,6 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [otpSent, setOtpSent] = useState(false);
 
-  // Form fields
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [email, setEmail] = useState('');
@@ -25,12 +24,36 @@ export default function AuthPage() {
   const [name, setName] = useState('');
 
   const navigate = useNavigate();
-  const { setUser } = useAuthStore();
+  const { setUser, setOnboarded } = useAuthStore();
+  const { setBusiness } = useBusinessStore();
 
   const resetForm = () => {
     setError('');
     setOtpSent(false);
     setOtp('');
+  };
+
+  // Check if user already has a business and route accordingly
+  const checkBusinessAndNavigate = async (userId: string) => {
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('id, business_name, business_type, business_category, owner_name, onboarding_completed')
+      .eq('owner_id', userId)
+      .single();
+
+    if (biz && biz.onboarding_completed) {
+      setBusiness({
+        id: biz.id,
+        name: biz.business_name,
+        type: biz.business_type,
+        category: biz.business_category,
+        ownerName: biz.owner_name,
+      });
+      setOnboarded(true);
+      navigate('/');
+    } else {
+      navigate('/onboarding');
+    }
   };
 
   // ---- EMAIL AUTH ----
@@ -57,7 +80,7 @@ export default function AuthPage() {
         if (signInError) throw signInError;
         if (data.user) {
           setUser({ id: data.user.id, email: data.user.email ?? '' });
-          navigate('/');
+          await checkBusinessAndNavigate(data.user.id);
         }
       }
     } catch (err: any) {
@@ -81,7 +104,6 @@ export default function AuthPage() {
       if (otpError) throw otpError;
       setOtpSent(true);
     } catch (err: any) {
-      // For dev without Twilio, show a friendly message
       if (err.message?.includes('not enabled') || err.message?.includes('provider')) {
         setError('Phone OTP is not configured yet. Use Email or Google sign-in for now.');
       } else {
@@ -105,7 +127,7 @@ export default function AuthPage() {
       if (verifyError) throw verifyError;
       if (data.user) {
         setUser({ id: data.user.id, email: data.user.email ?? '' });
-        navigate('/onboarding');
+        await checkBusinessAndNavigate(data.user.id);
       }
     } catch (err: any) {
       setError(err.message || 'Invalid OTP');
@@ -142,9 +164,9 @@ export default function AuthPage() {
         lg:border-x lg:border-neutral-200 lg:dark:border-white/5">
         
         {/* Top area with branding */}
-        <div className="pt-16 pb-8 px-6 text-center">
+        <div className="pt-12 pb-6 px-6 text-center">
           <AnimatedLogo size="lg" />
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white mt-6">
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white mt-6">
             {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </h1>
           <p className="text-sm text-neutral-500 dark:text-zinc-400 mt-2">
@@ -200,7 +222,7 @@ export default function AuthPage() {
                           <div className="flex items-center gap-1 px-3 py-3 rounded-xl
                             bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10
                             text-sm font-semibold text-neutral-700 dark:text-zinc-300">
-                            🇮🇳 +91
+                            IN +91
                           </div>
                           <input
                             type="tel"
@@ -223,7 +245,7 @@ export default function AuthPage() {
                         disabled={loading || phone.length < 10}
                         className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl
                           bg-gradient-to-r from-[#c8ee44] to-[#a3c428] text-black font-semibold text-[15px]
-                          shadow-glow-green active:scale-[0.98] transition-all
+                          shadow-[0_4px_20px_rgba(200,238,68,0.3)] active:scale-[0.98] transition-all
                           disabled:opacity-50 disabled:active:scale-100"
                       >
                         {loading ? <Loader2 size={18} className="animate-spin" /> : <>Send OTP <ArrowRight size={18} /></>}
@@ -255,14 +277,14 @@ export default function AuthPage() {
                         disabled={loading || otp.length < 6}
                         className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl
                           bg-gradient-to-r from-[#c8ee44] to-[#a3c428] text-black font-semibold text-[15px]
-                          shadow-glow-green active:scale-[0.98] transition-all
+                          shadow-[0_4px_20px_rgba(200,238,68,0.3)] active:scale-[0.98] transition-all
                           disabled:opacity-50 disabled:active:scale-100"
                       >
                         {loading ? <Loader2 size={18} className="animate-spin" /> : <>Verify OTP <ArrowRight size={18} /></>}
                       </button>
                       <button
                         onClick={() => { setOtpSent(false); setOtp(''); }}
-                        className="w-full text-center text-sm text-[#9abf2a] font-semibold py-2"
+                        className="w-full text-center text-sm text-[#8fb02e] dark:text-[#c8ee44] font-semibold py-2"
                       >
                         Change number
                       </button>
@@ -348,7 +370,7 @@ export default function AuthPage() {
                     disabled={loading || !email || !password || (mode === 'signup' && !name)}
                     className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl
                       bg-gradient-to-r from-[#c8ee44] to-[#a3c428] text-black font-semibold text-[15px]
-                      shadow-glow-green active:scale-[0.98] transition-all
+                      shadow-[0_4px_20px_rgba(200,238,68,0.3)] active:scale-[0.98] transition-all
                       disabled:opacity-50 disabled:active:scale-100"
                   >
                     {loading ? (
@@ -394,7 +416,7 @@ export default function AuthPage() {
                 {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
                 <button
                   onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); resetForm(); }}
-                  className="text-[#9abf2a] font-semibold"
+                  className="text-[#8fb02e] dark:text-[#c8ee44] font-semibold"
                 >
                   {mode === 'login' ? 'Sign Up' : 'Sign In'}
                 </button>
